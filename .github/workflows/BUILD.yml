@@ -1,0 +1,92 @@
+name: "Build ProjectDozG builder"
+
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        description: "Device"
+        required: true
+        default: "a12s"
+      branch:
+        description: "branch"
+        required: true
+        default: "sixteen"
+        type: choice
+        options:
+          - "sixteen"
+          - "fifteen"
+          - "fourteen"
+      debug_build:
+        description: "Debug build"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: "Build ProjectDozG"
+    runs-on: ubuntu-24.04
+    steps:
+        - name: "Checkout"
+          uses: actions/checkout@v4
+
+        - name: "Free disk space"
+          uses: jlumbroso/free-disk-space@main
+          with:
+            tool-cache: true
+            android: true
+            dotnet: true
+            haskell: true
+            large-packages: true
+            docker-images: true
+
+        - name: "Set up dependencies"
+          run: |
+            sudo apt update
+            DEBIAN_FRONTEND=noninteractive sudo apt install -yq \
+              7zip attr ccache clang ffmpeg \
+              libbrotli-dev libbz2-dev libgtest-dev libprotobuf-dev libunwind-dev libpcre2-dev \
+              libzstd-dev linux-modules-extra-$(uname -r) lld protobuf-compiler webp openjdk-17-jdk
+            sudo modprobe erofs f2fs
+
+        - name: "Clone ProjectDozG repo"
+          run: |
+            git clone --recurse-submodules -b ${{ github.event.inputs.branch }} --single-branch https://github.com/ProjectDozG/ProjectDozG ProjectDozG
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        - name: "Build ProjectDozG !"
+          run: |
+            export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+            cd ProjectDozG
+            if [ "${{ github.event.inputs.debug_build }}" = "true" ]; then
+              source buildenv.sh --debug ${{ github.event.inputs.device }}
+            else
+              source buildenv.sh ${{ github.event.inputs.device }}
+            fi
+            run_cmd make_rom --build-rom-zip
+          continue-on-error: true
+
+        - name: "Prepare Artifacts"
+          run: |
+            mkdir -p out
+            echo "Checking files in output directory:"
+            ls -la ProjectDozG/out/ || true
+            cp ProjectDozG/out/*.zip out/ || true
+
+        - name: "Upload flashable zip"
+          uses: actions/upload-artifact@v4
+          with:
+            name: flashable-zip-${{ github.event.inputs.device }}
+            path: out/ProjectDozG_*${{ github.event.inputs.device }}*.zip
+            if-no-files-found: warn
+
+        - name: "Upload target"
+          uses: actions/upload-artifact@v4
+          with:
+            name: target-files-${{ github.event.inputs.device }}
+            path: out/${{ github.event.inputs.device }}_*-target_files.zip
+            if-no-files-found: warn
