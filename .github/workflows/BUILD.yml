@@ -1,4 +1,4 @@
-name: "Build ProjectDozG builder"
+name: "ProjectDozG builder"
 
 on:
   workflow_dispatch:
