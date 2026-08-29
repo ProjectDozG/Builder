@@ -16,6 +16,7 @@ on:
           - "sixteen"
           - "fifteen"
           - "fourteen"
+          - "TMP"
       debug_build:
         description: "Debug build"
         required: true
